@@ -3,7 +3,7 @@ import pygame
 from graphics import load_and_scale_piece_images
 
 # --- GAME CONFIG ---
-GRID_COLS = 15
+GRID_COLS = 10
 GRID_ROWS = 20
 BLOCK_SIZE = 48
 BLOCK_TYPES = ["Drill", "Grinder", "Saw", "Spanner", "Screwdriver", "Trowel"]
@@ -47,18 +47,19 @@ def draw_game(screen, grid, current_piece=None):
                 if img:
                     screen.blit(img, rect)
 
-    # Draw the falling piece on top (if any)
+    # Draw the falling piece using y_pos for smooth animation
     if current_piece:
         block = current_piece["type"]
-        row = current_piece["row"]
         col = current_piece["col"]
+        y_pos = current_piece["y_pos"]
         # Only draw if within bounds and cell empty
-        if 0 <= row < rows and 0 <= col < cols and grid[row][col] is None:
-            rect = pygame.Rect(offset_x + col * BLOCK_SIZE, offset_y + row * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+        int_row = int(y_pos)
+        if 0 <= int_row < rows and 0 <= col < cols and grid[int_row][col] is None:
+            x_render = offset_x + col * BLOCK_SIZE
+            y_render = offset_y + y_pos * BLOCK_SIZE
             img = piece_images.get(block)
             if img:
-                screen.blit(img, rect)
-
+                screen.blit(img, (x_render, y_render))
 
 def find_matches(grid, min_match=3):
     rows, cols = len(grid), len(grid[0])

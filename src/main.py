@@ -1,16 +1,18 @@
 import pygame
 import sys
-import time
 from graphics import load_and_scale_piece_images, load_font
 from ui import Button, draw_modal
-from game import find_matches, clear_matches, apply_gravity
-from game import start_new_grid, draw_game, GRID_COLS, BLOCK_TYPES
+from game import (
+    start_new_grid, draw_game, find_matches, clear_matches, apply_gravity,
+    GRID_COLS, BLOCK_TYPES
+)
 
 def main():
     pygame.init()
     WIDTH, HEIGHT = 1920, 1080
     CENTER_X, CENTER_Y = WIDTH // 2, HEIGHT // 2
-    GRAVITY_INTERVAL = 500  # ms
+
+    FALL_ROWS_PER_SEC = 4  # blocks per second, tweak for faster/slower
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("PyBlockDrop")
 
@@ -34,6 +36,7 @@ def main():
 
     about_modal = False
     options_modal = False
+    score = 0
 
     STATE_MENU = "menu"
     STATE_GAME = "game"
@@ -41,10 +44,10 @@ def main():
 
     grid = []
     current_piece = None
-    last_gravity_time = pygame.time.get_ticks()
 
     running = True
     clock = pygame.time.Clock()
+
     while running:
         screen.fill((30, 30, 40))
 
@@ -80,6 +83,7 @@ def main():
                     else:
                         if buttons[0].is_hover((mx, my)):
                             grid = start_new_grid(fill_rows=5)
+                            # Remove accidental matches before first drop
                             while True:
                                 matches = find_matches(grid)
                                 if not matches:
@@ -88,10 +92,9 @@ def main():
                                 apply_gravity(grid)
                             current_piece = {
                                 "type": BLOCK_TYPES[pygame.time.get_ticks() % len(BLOCK_TYPES)],
-                                "row": 0,
-                                "col": GRID_COLS // 2
+                                "col": GRID_COLS // 2,
+                                "y_pos": 0.0  # Start at the very top (float)
                             }
-                            last_gravity_time = pygame.time.get_ticks()
                             current_state = STATE_GAME
                         elif buttons[1].is_hover((mx, my)):
                             about_modal = True
@@ -99,36 +102,51 @@ def main():
                             options_modal = True
 
         elif current_state == STATE_GAME:
-            now = pygame.time.get_ticks()
-            # GRAVITY
-            if current_piece and now - last_gravity_time > GRAVITY_INTERVAL:
-                row = current_piece["row"]
+            dt = clock.tick(60) / 1000.0  # Seconds since last frame
+
+            if current_piece:
+                fall_speed = FALL_ROWS_PER_SEC  # blocks per second
+                current_piece.setdefault("row", 0)
+                # Smoothly increment y_pos every frame
+                current_piece["y_pos"] += fall_speed * dt
+
+                # Determine logical row based on y_pos
                 col = current_piece["col"]
-                if row + 1 < len(grid) and grid[row + 1][col] is None:
-                    current_piece["row"] += 1
-                else:
-                    # Lock in place
-                    grid[row][col] = current_piece["type"]
-                    did_clear = False
+                y_pos = current_piece["y_pos"]
+                logical_row = int(y_pos)
+                at_bottom = logical_row + 1 >= len(grid)
+                blocked = not at_bottom and grid[logical_row + 1][col] is not None
+
+                if at_bottom or blocked:
+                    # Snap y_pos to grid, lock into grid
+                    landed_row = min(logical_row, len(grid) - 1)
+                    current_piece["y_pos"] = landed_row
+                    grid[landed_row][col] = current_piece["type"]
+                    # Clear matches and gravity, repeat if needed
                     while True:
                         matches = find_matches(grid)
                         if not matches:
                             break
+                        score += len(matches)
                         clear_matches(grid, matches)
                         apply_gravity(grid)
-                        did_clear = True
-                    # Spawn new piece at top
+                    # Spawn new piece
                     current_piece = {
                         "type": BLOCK_TYPES[pygame.time.get_ticks() % len(BLOCK_TYPES)],
-                        "row": 0,
-                        "col": GRID_COLS // 2
+                        "col": GRID_COLS // 2,
+                        "y_pos": 0.0
                     }
                     # Game over if spawn blocked
                     if grid[0][GRID_COLS // 2] is not None:
                         current_state = STATE_MENU
-                last_gravity_time = now
 
             draw_game(screen, grid, current_piece)
+
+            score_font = modal_font  # or use a different size/font if you want
+            score_surface = score_font.render(f"Score: {score}", True, (255, 255, 80))
+            score_rect = score_surface.get_rect(topright=(screen.get_width() - 40, 30))
+            screen.blit(score_surface, score_rect)
+
             pygame.display.flip()
 
             for event in pygame.event.get():
@@ -136,7 +154,7 @@ def main():
                     running = False
                 elif event.type == pygame.KEYDOWN:
                     if current_piece:
-                        row = current_piece["row"]
+                        row = int(current_piece["y_pos"])
                         col = current_piece["col"]
                         # Move left
                         if event.key == pygame.K_LEFT:
@@ -148,14 +166,13 @@ def main():
                             new_col = col + 1
                             if new_col < GRID_COLS and grid[row][new_col] is None:
                                 current_piece["col"] = new_col
-                        # Soft drop
+                        # Soft drop (down arrow)
                         elif event.key == pygame.K_DOWN:
-                            if row + 1 < len(grid) and grid[row + 1][col] is None:
-                                current_piece["row"] += 1
+                            test_row = int(current_piece["y_pos"]) + 1
+                            if test_row < len(grid) and grid[test_row][col] is None:
+                                current_piece["y_pos"] += 1.0
                     if event.key == pygame.K_ESCAPE:
                         current_state = STATE_MENU
-
-            clock.tick(60)
 
     pygame.quit()
     sys.exit()
