@@ -36,14 +36,15 @@ def main():
 
     about_modal = False
     options_modal = False
-    score = 0
 
     STATE_MENU = "menu"
     STATE_GAME = "game"
+    STATE_GAME_OVER = "game_over"
     current_state = STATE_MENU
 
     grid = []
     current_piece = None
+    score = 0
 
     running = True
     clock = pygame.time.Clock()
@@ -82,6 +83,7 @@ def main():
                             options_modal = False
                     else:
                         if buttons[0].is_hover((mx, my)):
+                            score = 0  # Reset score for new game
                             grid = start_new_grid(fill_rows=5)
                             # Remove accidental matches before first drop
                             while True:
@@ -105,12 +107,10 @@ def main():
             dt = clock.tick(60) / 1000.0  # Seconds since last frame
 
             if current_piece:
-                fall_speed = FALL_ROWS_PER_SEC  # blocks per second
+                fall_speed = FALL_ROWS_PER_SEC
                 current_piece.setdefault("row", 0)
-                # Smoothly increment y_pos every frame
                 current_piece["y_pos"] += fall_speed * dt
 
-                # Determine logical row based on y_pos
                 col = current_piece["col"]
                 y_pos = current_piece["y_pos"]
                 logical_row = int(y_pos)
@@ -118,31 +118,34 @@ def main():
                 blocked = not at_bottom and grid[logical_row + 1][col] is not None
 
                 if at_bottom or blocked:
-                    # Snap y_pos to grid, lock into grid
+                    # Snap y_pos to grid, lock in
                     landed_row = min(logical_row, len(grid) - 1)
                     current_piece["y_pos"] = landed_row
                     grid[landed_row][col] = current_piece["type"]
-                    # Clear matches and gravity, repeat if needed
-                    while True:
-                        matches = find_matches(grid)
-                        if not matches:
-                            break
-                        score += len(matches)
-                        clear_matches(grid, matches)
-                        apply_gravity(grid)
-                    # Spawn new piece
-                    current_piece = {
-                        "type": BLOCK_TYPES[pygame.time.get_ticks() % len(BLOCK_TYPES)],
-                        "col": GRID_COLS // 2,
-                        "y_pos": 0.0
-                    }
-                    # Game over if spawn blocked
-                    if grid[0][GRID_COLS // 2] is not None:
-                        current_state = STATE_MENU
+
+                    # GAME OVER check: did a piece land on row 0?
+                    if landed_row == 0:
+                        current_state = STATE_GAME_OVER
+                    else:
+                        # Clear matches, apply gravity, count score
+                        while True:
+                            matches = find_matches(grid)
+                            if not matches:
+                                break
+                            score += len(matches)
+                            clear_matches(grid, matches)
+                            apply_gravity(grid)
+                        # Spawn new piece
+                        current_piece = {
+                            "type": BLOCK_TYPES[pygame.time.get_ticks() % len(BLOCK_TYPES)],
+                            "col": GRID_COLS // 2,
+                            "y_pos": 0.0
+                        }
 
             draw_game(screen, grid, current_piece)
 
-            score_font = modal_font  # or use a different size/font if you want
+            # --- Draw the score ---
+            score_font = modal_font
             score_surface = score_font.render(f"Score: {score}", True, (255, 255, 80))
             score_rect = score_surface.get_rect(topright=(screen.get_width() - 40, 30))
             screen.blit(score_surface, score_rect)
@@ -173,6 +176,31 @@ def main():
                                 current_piece["y_pos"] += 1.0
                     if event.key == pygame.K_ESCAPE:
                         current_state = STATE_MENU
+
+        elif current_state == STATE_GAME_OVER:
+            screen.fill((30, 30, 40))
+            over_font = title_font
+            msg = "GAME OVER"
+            msg_surface = over_font.render(msg, True, (255, 80, 80))
+            msg_rect = msg_surface.get_rect(center=(CENTER_X, CENTER_Y - 40))
+            screen.blit(msg_surface, msg_rect)
+
+            score_font = modal_font
+            score_surface = score_font.render(f"Final Score: {score}", True, (255, 255, 80))
+            score_rect = score_surface.get_rect(center=(CENTER_X, CENTER_Y + 50))
+            screen.blit(score_surface, score_rect)
+
+            hint_surface = modal_font.render("Press any key to return to menu", True, (200, 200, 200))
+            hint_rect = hint_surface.get_rect(center=(CENTER_X, CENTER_Y + 120))
+            screen.blit(hint_surface, hint_rect)
+
+            pygame.display.flip()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                    current_state = STATE_MENU
 
     pygame.quit()
     sys.exit()

@@ -1,3 +1,4 @@
+import os
 import random
 import pygame
 from graphics import load_and_scale_piece_images
@@ -6,9 +7,18 @@ from graphics import load_and_scale_piece_images
 GRID_COLS = 10
 GRID_ROWS = 20
 BLOCK_SIZE = 48
-BLOCK_TYPES = ["Drill", "Grinder", "Saw", "Spanner", "Screwdriver", "Trowel"]
 
 _piece_images = None  # Cache for piece images
+
+def discover_block_types(asset_dir="../assets/Graphics/Pieces"):
+    # Only grab PNG files, drop the .png extension for piece name
+    return [
+        os.path.splitext(f)[0]
+        for f in os.listdir(asset_dir)
+        if f.lower().endswith(".png")
+    ]
+
+BLOCK_TYPES = discover_block_types()
 
 def get_piece_images():
     global _piece_images
