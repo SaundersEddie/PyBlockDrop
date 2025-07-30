@@ -9,6 +9,8 @@ from game import (
 
 def main():
     pygame.init()
+    pygame.mixer.init()
+
     WIDTH, HEIGHT = 1920, 1080
     CENTER_X, CENTER_Y = WIDTH // 2, HEIGHT // 2
 
@@ -48,6 +50,9 @@ def main():
 
     running = True
     clock = pygame.time.Clock()
+
+    pygame.mixer.music.load("../assets/Music/GameMusic.mp3")
+    pygame.mixer.music.play(-1)  # -1 = loop forever
 
     while running:
         screen.fill((30, 30, 40))
@@ -105,6 +110,7 @@ def main():
 
         elif current_state == STATE_GAME:
             dt = clock.tick(60) / 1000.0  # Seconds since last frame
+
 
             if current_piece:
                 fall_speed = FALL_ROWS_PER_SEC
