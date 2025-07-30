@@ -58,3 +58,50 @@ def draw_game(screen, grid, current_piece=None):
             img = piece_images.get(block)
             if img:
                 screen.blit(img, rect)
+
+
+def find_matches(grid, min_match=3):
+    rows, cols = len(grid), len(grid[0])
+    to_clear = set()
+
+    # Horizontal check
+    for r in range(rows):
+        c = 0
+        while c < cols:
+            start = c
+            while c + 1 < cols and grid[r][c] is not None and grid[r][c] == grid[r][c + 1]:
+                c += 1
+            if grid[r][start] is not None and c - start + 1 >= min_match:
+                for clear_c in range(start, c + 1):
+                    to_clear.add((r, clear_c))
+            c += 1
+
+    # Vertical check
+    for c in range(cols):
+        r = 0
+        while r < rows:
+            start = r
+            while r + 1 < rows and grid[r][c] is not None and grid[r][c] == grid[r + 1][c]:
+                r += 1
+            if grid[start][c] is not None and r - start + 1 >= min_match:
+                for clear_r in range(start, r + 1):
+                    to_clear.add((clear_r, c))
+            r += 1
+
+    return to_clear
+
+def clear_matches(grid, matches):
+    for r, c in matches:
+        grid[r][c] = None
+
+def apply_gravity(grid):
+    rows, cols = len(grid), len(grid[0])
+    for c in range(cols):
+        stack = [grid[r][c] for r in range(rows) if grid[r][c] is not None]
+        # Fill from bottom up
+        for r in range(rows - 1, -1, -1):
+            if stack:
+                grid[r][c] = stack.pop()
+            else:
+                grid[r][c] = None
+

@@ -1,13 +1,16 @@
 import pygame
 import sys
+import time
 from graphics import load_and_scale_piece_images, load_font
 from ui import Button, draw_modal
+from game import find_matches, clear_matches, apply_gravity
 from game import start_new_grid, draw_game, GRID_COLS, BLOCK_TYPES
 
 def main():
     pygame.init()
     WIDTH, HEIGHT = 1920, 1080
     CENTER_X, CENTER_Y = WIDTH // 2, HEIGHT // 2
+    GRAVITY_INTERVAL = 500  # ms
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("PyBlockDrop")
 
@@ -38,6 +41,7 @@ def main():
 
     grid = []
     current_piece = None
+    last_gravity_time = pygame.time.get_ticks()
 
     running = True
     clock = pygame.time.Clock()
@@ -75,12 +79,19 @@ def main():
                             options_modal = False
                     else:
                         if buttons[0].is_hover((mx, my)):
-                            grid = start_new_grid()
+                            grid = start_new_grid(fill_rows=5)
+                            while True:
+                                matches = find_matches(grid)
+                                if not matches:
+                                    break
+                                clear_matches(grid, matches)
+                                apply_gravity(grid)
                             current_piece = {
-                                "type": BLOCK_TYPES[pygame.time.get_ticks() % len(BLOCK_TYPES)],  # A little variety
+                                "type": BLOCK_TYPES[pygame.time.get_ticks() % len(BLOCK_TYPES)],
                                 "row": 0,
                                 "col": GRID_COLS // 2
                             }
+                            last_gravity_time = pygame.time.get_ticks()
                             current_state = STATE_GAME
                         elif buttons[1].is_hover((mx, my)):
                             about_modal = True
@@ -88,6 +99,35 @@ def main():
                             options_modal = True
 
         elif current_state == STATE_GAME:
+            now = pygame.time.get_ticks()
+            # GRAVITY
+            if current_piece and now - last_gravity_time > GRAVITY_INTERVAL:
+                row = current_piece["row"]
+                col = current_piece["col"]
+                if row + 1 < len(grid) and grid[row + 1][col] is None:
+                    current_piece["row"] += 1
+                else:
+                    # Lock in place
+                    grid[row][col] = current_piece["type"]
+                    did_clear = False
+                    while True:
+                        matches = find_matches(grid)
+                        if not matches:
+                            break
+                        clear_matches(grid, matches)
+                        apply_gravity(grid)
+                        did_clear = True
+                    # Spawn new piece at top
+                    current_piece = {
+                        "type": BLOCK_TYPES[pygame.time.get_ticks() % len(BLOCK_TYPES)],
+                        "row": 0,
+                        "col": GRID_COLS // 2
+                    }
+                    # Game over if spawn blocked
+                    if grid[0][GRID_COLS // 2] is not None:
+                        current_state = STATE_MENU
+                last_gravity_time = now
+
             draw_game(screen, grid, current_piece)
             pygame.display.flip()
 
@@ -108,11 +148,14 @@ def main():
                             new_col = col + 1
                             if new_col < GRID_COLS and grid[row][new_col] is None:
                                 current_piece["col"] = new_col
-                    # ESC to return to menu (optional)
+                        # Soft drop
+                        elif event.key == pygame.K_DOWN:
+                            if row + 1 < len(grid) and grid[row + 1][col] is None:
+                                current_piece["row"] += 1
                     if event.key == pygame.K_ESCAPE:
                         current_state = STATE_MENU
 
-        clock.tick(60)
+            clock.tick(60)
 
     pygame.quit()
     sys.exit()
